@@ -51,6 +51,8 @@ class DatabaseService {
         ''');
       },
     );
+
+    print("[DB] Initialized at: $path");
   }
 
   Database get _database {
@@ -93,13 +95,25 @@ class DatabaseService {
     };
 
     try {
-      await db.insert(
+      final inserted = await db.insert(
         'telemetry',
         map,
         conflictAlgorithm: ConflictAlgorithm.ignore,
       );
+
+      print(
+        "[DB] INSERT ${inserted == 0 ? "(DUPLICATE)" : "OK"} for KIT=$deviceId | ph=${data.ph} | ppm=${data.ppm}",
+      );
+
+      final count = Sqflite.firstIntValue(
+        await db.rawQuery("SELECT COUNT(*) FROM telemetry WHERE device_id=?", [
+          deviceId,
+        ]),
+      );
+
+      print("[DB] Current rows for $deviceId → $count");
     } catch (e) {
-      // duplikat hash atau error insert -> diabaikan
+      print("[DB] INSERT ERROR for $deviceId → $e");
     }
   }
 
@@ -121,7 +135,6 @@ class DatabaseService {
         .toList();
   }
 
-  // === NEW: ambil data + timestamp dari SQLite (untuk HistoryScreen)
   Future<List<Map<String, dynamic>>> getEntriesWithTs(String deviceId) async {
     final db = _database;
     final rows = await db.query(
@@ -148,10 +161,13 @@ class DatabaseService {
       where: 'ingest_time < ?',
       whereArgs: [threshold],
     );
+
+    print("[DB] Pruned rows older than $age");
   }
 
   Future<void> close() async {
     await _db?.close();
+    print("[DB] Closed");
     _db = null;
   }
 }
